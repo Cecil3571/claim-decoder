@@ -414,7 +414,7 @@ ${underpaymentRisk ? underpaymentRisk.summary : "Not analyzed"}
                   
                   {/* Step 1: File Upload */}
                   <div className="space-y-4">
-                    <FormLabel className="text-base font-semibold">1. Upload Policy PDF</FormLabel>
+                    <label className="text-base font-semibold text-foreground block">1. Upload Policy PDF</label>
                     <FileUpload 
                       selectedFile={file}
                       onFileSelect={(f) => {
@@ -425,7 +425,7 @@ ${underpaymentRisk ? underpaymentRisk.summary : "Not analyzed"}
                   </div>
 
                   {/* Step 2: Details */}
-                  <div className="grid md:grid-cols-2 gap-6">
+                  <div className="grid md:grid-cols-2 gap-6 space-y-0">
                     <FormField
                       control={form.control}
                       name="state"
