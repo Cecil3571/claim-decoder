@@ -1,8 +1,11 @@
-import type { Express } from "express";
+import type { Express, Request } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { extractTextViaPdfKitchen } from "./pdf-parser";
 import { structurePolicy, analyzeCoverage, analyzeUnderpayment } from "./llm";
+import multer from "multer";
+
+const upload = multer({ storage: multer.memoryStorage() });
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Health check endpoint
@@ -11,20 +14,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // POST /api/analyze - Main endpoint to upload policy and get analysis
-  app.post("/api/analyze", async (req, res, next) => {
+  app.post("/api/analyze", upload.single("file"), async (req, res, next) => {
     try {
-      const { state, policyType, lossDescription, pdfBase64, filename } = req.body;
+      const { state, policyType, lossDescription } = req.body;
+      const file = req.file;
 
       // Validate inputs
-      if (!pdfBase64 || !filename || !state || !policyType || !lossDescription) {
+      if (!file || !state || !policyType || !lossDescription) {
         return res.status(400).json({ error: "Missing required fields" });
       }
 
-      // Decode base64 PDF
-      const pdfBuffer = Buffer.from(pdfBase64, "base64");
-
       // Step 1: Extract text via PDF Kitchen
-      const rawPdfText = await extractTextViaPdfKitchen(pdfBuffer, filename);
+      const rawPdfText = await extractTextViaPdfKitchen(file.buffer, file.originalname);
 
       // Step 2: Structure policy via LLM
       const policyData = await structurePolicy(rawPdfText);
