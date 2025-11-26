@@ -3,7 +3,6 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { extractTextViaPdfKitchen } from "./pdf-parser";
 import { structurePolicy, analyzeCoverage, analyzeUnderpayment } from "./llm";
-import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // POST /api/analyze - Main endpoint to upload policy and get analysis
