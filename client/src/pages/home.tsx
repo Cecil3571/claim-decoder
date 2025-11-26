@@ -17,7 +17,8 @@ import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
-import { analyzePolicy, analyzeUnderpayment, type PolicyData, type CoverageAnalysis, type UnderpaymentRisk } from "@/lib/mock-service";
+import { analyzePolicy as realAnalyzePolicy, analyzeUnderpayment as realAnalyzeUnderpayment } from "@/lib/api-service";
+import { type PolicyData, type CoverageAnalysis, type UnderpaymentRisk } from "@/lib/mock-service";
 
 // --- Zod Schemas ---
 const analysisFormSchema = z.object({
@@ -33,6 +34,7 @@ export default function Home() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [step, setStep] = useState<"upload" | "results">("upload");
   
+  const [analysisId, setAnalysisId] = useState<string | null>(null);
   const [policyData, setPolicyData] = useState<PolicyData | null>(null);
   const [coverageAnalysis, setCoverageAnalysis] = useState<CoverageAnalysis | null>(null);
   const [underpaymentRisk, setUnderpaymentRisk] = useState<UnderpaymentRisk | null>(null);
@@ -62,7 +64,8 @@ export default function Home() {
 
     setIsAnalyzing(true);
     try {
-      const result = await analyzePolicy(file, values.state, values.policyType, values.lossDescription);
+      const result = await realAnalyzePolicy(file, values.state, values.policyType, values.lossDescription);
+      setAnalysisId(result.id);
       setPolicyData(result.policy);
       setCoverageAnalysis(result.analysis);
       setStep("results");
@@ -73,7 +76,7 @@ export default function Home() {
     } catch (error) {
       toast({
         title: "Error",
-        description: "Failed to analyze policy. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to analyze policy. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -82,16 +85,16 @@ export default function Home() {
   };
 
   const handleRiskCheck = async () => {
-    if (!estimateText.trim() || !policyData) return;
+    if (!estimateText.trim() || !analysisId) return;
     
     setIsCheckingRisk(true);
     try {
-      const result = await analyzeUnderpayment(policyData, form.getValues().lossDescription, estimateText);
+      const result = await realAnalyzeUnderpayment(analysisId, estimateText);
       setUnderpaymentRisk(result);
     } catch (error) {
       toast({
         title: "Error",
-        description: "Failed to check underpayment risk.",
+        description: error instanceof Error ? error.message : "Failed to check underpayment risk.",
         variant: "destructive",
       });
     } finally {
