@@ -6,9 +6,17 @@ export async function analyzePolicy(
   type: string,
   description: string
 ): Promise<{ id: string; policy: PolicyData; analysis: CoverageAnalysis }> {
-  // Read file as base64
-  const buffer = await file.arrayBuffer();
-  const base64 = Buffer.from(buffer).toString("base64");
+  // Read file as base64 using browser FileReader API
+  const base64 = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      const base64String = result.split(",")[1];
+      resolve(base64String);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 
   const response = await fetch("/api/analyze", {
     method: "POST",
