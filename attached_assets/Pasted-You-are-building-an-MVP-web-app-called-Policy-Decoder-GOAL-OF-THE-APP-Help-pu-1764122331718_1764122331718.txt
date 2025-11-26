@@ -1,0 +1,229 @@
+You are building an MVP web app called **Policy Decoder**.
+
+GOAL OF THE APP
+----------------
+Help public adjusters, attorneys, and policyholders quickly understand a property insurance policy and spot potential coverage gaps or claim underpayment risks.
+
+The MVP should:
+1. Let the user upload a policy PDF (declarations + forms/endorsements).
+2. Send that PDF to my existing PDF parsing microservice **PDF Kitchen** and use its response as the ONLY source of parsed text.
+3. Ask the user for:
+   - State/jurisdiction (e.g., FL, TX, LA)
+   - Policy type (e.g., HO-3, DP-1, commercial property)
+   - Short loss description (free text)
+4. Use an LLM to:
+   - Produce a **Policy Summary Sheet** (limits, deductibles, major coverages, key exclusions).
+   - Generate a **Coverage Checklist** for the loss scenario (what’s likely covered, excluded, or ambiguous).
+   - Generate a simple **Underpayment Risk Checklist** if the user pastes the carrier’s estimate text.
+5. Display clean, structured results in a dashboard layout with a dark theme.
+
+STACK & ARCHITECTURE
+---------------------
+- Backend: Python + FastAPI
+- Frontend: Simple HTML + Tailwind CSS (or similar utility CSS) with a **dark / NovigDark-style** theme.
+- Templating: Jinja2 or FastAPI’s standard templating.
+- **PDF parsing: USE MY EXISTING “PDF Kitchen” SERVICE, NOT DIRECT PDF LIBRARIES.**
+  - Base URL: `https://pdf-kitchen.replit.app/` (this is a separate Replit app).
+  - Implement a helper in `pdf_parser.py` that:
+    - Accepts the uploaded PDF file (or bytes).
+    - Sends it via HTTP POST (multipart/form-data) to a PDF Kitchen endpoint.
+    - Receives parsed plain text or JSON and returns the extracted text to the rest of the app.
+  - Assume an endpoint like:
+      - `POST https://pdf-kitchen.replit.app/extract`
+      - multipart/form-data with a field named `file`
+      - JSON response shaped like: `{ "text": "....full extracted text...." }`
+    If the exact endpoint or shape needs to be adjusted, isolate it in one function so it’s easy to change later.
+- LLM calls: Assume access to an environment variable for the API key (e.g., OPENAI_API_KEY). Put all LLM interactions in a dedicated helper module.
+
+NO database is needed for MVP; everything can be in memory for each session.
+
+CORE USER FLOWS
+----------------
+
+Flow 1: Policy Upload & Summary
+1. User lands on the home page:
+   - App title: “Policy Decoder (MVP)”
+   - Short explanation: “Upload a property insurance policy and get a structured summary plus coverage analysis.”
+2. Form fields:
+   - File upload: Policy PDF (single file).
+   - Dropdown: State/Jurisdiction (e.g., FL, TX, LA, Other).
+   - Dropdown: Policy type (HO-3, HO-6, DP-1, Commercial, Other).
+   - Textarea: “Loss Description” (free text, required).
+3. On submit:
+   - Backend receives the uploaded PDF.
+   - Backend calls the **PDF Kitchen** service helper, something like:
+       raw_text = extract_text_via_pdf_kitchen(uploaded_file)
+   - If PDF Kitchen returns an error or empty text, show a friendly error message to the user.
+   - Run a first LLM call: **policy_structuring_prompt(raw_text)** that returns structured JSON:
+     {
+       "policy_type": "...",
+       "forms_detected": ["HO 00 03 05 11", "OL 04 20", ...],
+       "limits": {
+         "dwelling": "...",
+         "other_structures": "...",
+         "personal_property": "...",
+         "loss_of_use_ALE": "...",
+         "liability": "...",
+         "medical_payments": "..."
+       },
+       "deductibles": {
+         "all_peril": "...",
+         "hurricane_wind": "...",
+         "hail": "...",
+         "special": "..."
+       },
+       "key_endorsements": ["Ordinance or Law", "Roof Schedule", "Water Back-Up", ...],
+       "key_exclusions": ["Wear and tear", "Faulty workmanship", ...],
+       "notes": "Any helpful comments."
+     }
+
+4. Run a second LLM call: **coverage_analysis_prompt(structured_policy, loss_description, jurisdiction)** that returns:
+   {
+     "coverage_summary": "High-level narrative in plain English.",
+     "covered_aspects": ["Roof damage caused by wind", ...],
+     "excluded_aspects": ["Long-term seepage", ...],
+     "ambiguous_points": ["Matching of roofing materials may depend on state law ..."],
+     "questions_for_human": ["Confirm date of loss relative to policy term", ...]
+   }
+
+5. Render a results page with:
+   - A “Policy Summary Sheet” section showing limits, deductibles, endorsements, exclusions.
+   - A “Coverage Analysis” section with:
+     - Covered ✓
+     - Excluded ✗
+     - Ambiguous ⚠
+   - A small “Questions / Red Flags” list for the human reviewer.
+
+Flow 2: Underpayment Risk Check (Text Only)
+1. On the same results page, include a section:
+   - Textarea: “Paste the carrier’s estimate or summary here (optional).”
+   - Button: “Analyze Underpayment Risk”
+2. On submit:
+   - Run an LLM call: **underpayment_prompt(structured_policy, loss_description, carrier_estimate_text)** that returns:
+     {
+       "missing_categories": ["No Ordinance & Law for code upgrades", "No detach & reset line items", ...],
+       "suspicious_deductions": ["High depreciation on items that should not be depreciated", ...],
+       "scope_concerns": ["Half-roof replacement where matching statute might require full replacement", ...],
+       "summary": "Short narrative summary of likely underpayment risks."
+     }
+3. Display results under headings:
+   - “Potential Missing Categories”
+   - “Suspicious Deductions”
+   - “Scope Concerns”
+   - “Summary”
+
+This is a high-level checklist only, not a full Xactimate comparison.
+
+Flow 3: Export
+1. Provide a button “Download Report (Markdown or TXT)”.
+2. Generate a simple text/Markdown report that combines:
+   - Policy Summary Sheet
+   - Coverage Analysis
+   - Optional Underpayment Risk Checklist
+3. Send as a downloadable .txt or .md file.
+
+UI & DESIGN
+-----------
+- Single-page layout with sections.
+- Dark theme (NovigDark-style):
+  - Dark background
+  - Light text
+  - Accent color for buttons and headings
+- Keep it clean and readable:
+  - Left column: Inputs (upload + text fields).
+  - Right column: Results (summary, checklists, analysis).
+- Use clear section titles and simple icons/emojis like:
+  - ✅ Covered
+  - ❌ Excluded
+  - ⚠ Ambiguous
+- Show loading indicators during LLM calls and while waiting for PDF Kitchen’s response.
+
+CODE ORGANIZATION
+------------------
+Create a structure like:
+
+- main.py
+  - FastAPI app, routes for:
+    - GET "/" (render home)
+    - POST "/analyze_policy"
+    - POST "/analyze_underpayment"
+- templates/
+  - base.html
+  - index.html
+  - results.html (or combine index + results with conditional blocks)
+- static/
+  - styles.css (if not using CDN Tailwind)
+- services/
+  - pdf_parser.py
+    - `extract_text_via_pdf_kitchen(uploaded_file) -> str`
+    - Uses `requests` (or httpx) to call the PDF Kitchen URL.
+  - llm_client.py (low-level wrapper around the LLM API)
+  - prompts.py (contains Python multi-line strings for the prompts)
+  - policy_decoder.py (high-level functions that call prompts + llm_client)
+
+`pdf_parser.py` should roughly:
+- Accept the uploaded file as a file-like object or bytes.
+- Build a multipart/form-data POST request to PDF Kitchen.
+- Parse JSON response `{ "text": "..." }` and return `text`.
+- Handle errors gracefully and bubble up a clear message.
+
+Example: prompts.py defines 3 main prompt templates as Python strings, with clear comments:
+
+1) POLICY_STRUCTURING_PROMPT
+- Instructions to:
+  - Read raw policy text.
+  - Identify policy type, forms, limits, deductibles, endorsements, exclusions.
+  - Return strict JSON in the format described above.
+  - Be conservative and use "unknown" if unsure.
+
+2) COVERAGE_ANALYSIS_PROMPT
+- Inputs:
+  - structured_policy JSON
+  - loss_description
+  - jurisdiction/state
+- Instructions:
+  - Analyze likely coverage versus exclusions.
+  - Separate into lists: covered, excluded, ambiguous.
+  - List questions for human review.
+  - Do NOT invent policy language that isn’t supported by the structured_policy.
+
+3) UNDERPAYMENT_PROMPT
+- Inputs:
+  - structured_policy JSON
+  - loss_description
+  - carrier_estimate_text
+- Instructions:
+  - Look for missing categories and common underpayment patterns.
+  - Return JSON matching the underpayment schema described above.
+  - This is a heuristic checklist, not a legal conclusion.
+
+ENVIRONMENT & CONFIG
+---------------------
+- Read the LLM API key from an environment variable (e.g., OPENAI_API_KEY).
+- ALSO define an environment variable for the PDF Kitchen base URL (e.g., PDF_KITCHEN_URL = "https://pdf-kitchen.replit.app").
+- Put all model configuration (model name, temperature, etc.) inside llm_client.py.
+- Add basic error handling and user-friendly messages if:
+  - PDF Kitchen call fails
+  - LLM call fails
+  - API key is missing
+
+OUT OF SCOPE FOR MVP
+---------------------
+Do NOT implement:
+- User authentication
+- Databases or saving historical analyses
+- Advanced multi-file policy linking
+- Direct Xactimate file parsing
+- Direct PDF parsing with pdfplumber, PyPDF2, etc. → Always go through PDF Kitchen.
+
+Focus on making the **single-policy, single-analysis workflow** smooth, understandable, and easy to extend later.
+
+DELIVERABLE
+-----------
+Produce a working FastAPI app on Replit with:
+- A clean dark-themed UI.
+- Policy upload + summary that calls PDF Kitchen for parsing.
+- Coverage analysis view.
+- Optional underpayment checklist using pasted text.
+- Downloadable text/Markdown report.
+- Clear, well-organized code with comments so it can be extended later.
