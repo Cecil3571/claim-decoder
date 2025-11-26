@@ -17,8 +17,7 @@ import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
-import { analyzePolicy as realAnalyzePolicy, analyzeUnderpayment as realAnalyzeUnderpayment } from "@/lib/api-service";
-import { type PolicyData, type CoverageAnalysis, type UnderpaymentRisk } from "@/lib/mock-service";
+import { analyzePolicy, analyzeUnderpayment, type PolicyData, type CoverageAnalysis, type UnderpaymentRisk } from "@/lib/mock-service";
 
 // --- Zod Schemas ---
 const analysisFormSchema = z.object({
@@ -64,8 +63,8 @@ export default function Home() {
 
     setIsAnalyzing(true);
     try {
-      const result = await realAnalyzePolicy(file, values.state, values.policyType, values.lossDescription);
-      setAnalysisId(result.id);
+      const result = await analyzePolicy(file, values.state, values.policyType, values.lossDescription);
+      setAnalysisId("mock-" + Date.now());
       setPolicyData(result.policy);
       setCoverageAnalysis(result.analysis);
       setStep("results");
@@ -85,11 +84,11 @@ export default function Home() {
   };
 
   const handleRiskCheck = async () => {
-    if (!estimateText.trim() || !analysisId) return;
+    if (!estimateText.trim() || !policyData) return;
     
     setIsCheckingRisk(true);
     try {
-      const result = await realAnalyzeUnderpayment(analysisId, estimateText);
+      const result = await analyzeUnderpayment(policyData, form.getValues().lossDescription, estimateText);
       setUnderpaymentRisk(result);
     } catch (error) {
       toast({
