@@ -5,6 +5,11 @@ import { extractTextViaPdfKitchen } from "./pdf-parser";
 import { structurePolicy, analyzeCoverage, analyzeUnderpayment } from "./llm";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Health check endpoint
+  app.get("/api/health", (req, res) => {
+    res.json({ status: "ok" });
+  });
+
   // POST /api/analyze - Main endpoint to upload policy and get analysis
   app.post("/api/analyze", async (req, res, next) => {
     try {
