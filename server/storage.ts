@@ -1,6 +1,7 @@
 import { db } from "./db";
-import { policyAnalyses, type PolicyAnalysis, type InsertPolicyAnalysis } from "@shared/schema";
+import { policyAnalyses } from "@shared/schema";
 import { eq } from "drizzle-orm";
+import type { PolicyAnalysis, InsertPolicyAnalysis } from "@shared/schema";
 
 export interface IStorage {
   // Policy Analysis CRUD
